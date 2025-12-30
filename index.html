@@ -40,7 +40,6 @@
     th{ text-align:left; color:var(--mut); font-size:12px; letter-spacing:0.03em; text-transform:uppercase; }
     .pill{ display:inline-block; padding:3px 8px; border:1px solid rgba(255,255,255,0.16); border-radius:999px; background:rgba(255,255,255,0.06); font-size:12px; color:var(--mut); }
     .hint{ margin-top:10px; font-size:12px; color:var(--mut); }
-    a{ color:#aab2ff; }
   </style>
 </head>
 
@@ -49,7 +48,7 @@
     <h1>SUSS Timetable → ICS Generator</h1>
     <p>
       Paste your timetable copied from the student portal (eServices → Course Timetable).
-      Then click <b>Preview</b> to see what will be generated, and <b>Download .ics</b> to import into your calendar.
+      Click <b>Preview</b>, then <b>Download / Share .ics</b> to import into your calendar.
     </p>
 
     <div class="card">
@@ -58,7 +57,7 @@
       <div class="row">
         <button id="paste" class="secondary">Paste from clipboard</button>
         <button id="preview" class="secondary">Preview</button>
-        <button id="download" disabled>Download .ics</button>
+        <button id="download" disabled>Download / Share .ics</button>
 
         <label class="opt" title="Adds a reminder for each event">
           <input type="checkbox" id="alarm" />
@@ -96,8 +95,8 @@
         <div class="status" id="errors"></div>
       </div>
 
-      <div class="hint">
-        Tip: Portal copy usually keeps <b>tabs</b>. If you see everything in one column, try copying the table again (drag-select the table area).
+      <div class="hint" id="mobileHint" style="display:none;">
+        Phone tip: If a share sheet appears, choose <b>Save to Files</b> (iPhone) or your file app, then open the .ics to import.
       </div>
     </div>
   </div>
@@ -186,16 +185,13 @@
   }
 
   function stripRecordedNotice(text) {
-    // Removes the standard notice like:
-    // [Lesson is recorded for audit, learning, and attendance-management purposes.]
-    // (with minor spacing differences)
     return String(text ?? "").replace(
       /\[\s*Lesson\s+is\s+recorded[\s\S]*?attendance-?management\s+purposes\.\s*\]\s*/gi,
       ""
     ).trim();
   }
 
-  // Portal TSV-first parser (matches your pasted format)
+  // Portal TSV-first parser (matches your portal copy)
   function parseTimetable(raw) {
     const lines = raw
       .replace(/\r/g, "")
@@ -209,7 +205,6 @@
     for (const line of lines) {
       if (/^S\/N\s+COURSE\s+CODE/i.test(line)) continue;
       if (/^TIMETABLE\s+DETAILS/i.test(line)) continue;
-
       if (!/^\d+\t/.test(line)) continue;
 
       const parts0 = line.split("\t").map(s => s.trim());
@@ -275,8 +270,6 @@
       if (ev.venue) descLines.push(`Venue: ${ev.venue}`);
       if (remarksClean) descLines.push(`Remarks: ${remarksClean}`);
 
-      const description = descLines.join("\n");
-
       lines.push("BEGIN:VEVENT");
       lines.push(foldLine(`UID:${escapeICS(uid)}`));
       lines.push(`DTSTAMP:${dtstamp}`);
@@ -284,7 +277,7 @@
       lines.push(foldLine(`DTSTART;TZID=${TZID}:${dtstart}`));
       lines.push(foldLine(`DTEND;TZID=${TZID}:${dtend}`));
       if (ev.venue) lines.push(foldLine(`LOCATION:${escapeICS(ev.venue)}`));
-      lines.push(foldLine(`DESCRIPTION:${escapeICS(description)}`));
+      lines.push(foldLine(`DESCRIPTION:${escapeICS(descLines.join("\n"))}`));
 
       if (opts.alarm) {
         lines.push("BEGIN:VALARM");
@@ -301,16 +294,42 @@
     return lines.join("\r\n") + "\r\n";
   }
 
-  function downloadText(filename, text) {
+  // Cross-device: Share Sheet (mobile) → download (desktop) → open tab fallback
+  async function saveICS(filename, text) {
     const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+
+    // 1) Best on mobile: Web Share API with a real file
+    try {
+      if (navigator.share) {
+        const file = new File([blob], filename, { type: blob.type });
+
+        // Some browsers need canShare check; others work without it
+        const canShareFiles = navigator.canShare ? navigator.canShare({ files: [file] }) : true;
+        if (canShareFiles) {
+          await navigator.share({ files: [file], title: filename });
+          return;
+        }
+      }
+    } catch {
+      // If user cancels share or browser errors, fall through to next method
+    }
+
+    // 2) Try normal "download" (works on desktop + most Android browsers)
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+
+    // 3) If iOS ignored it, opening in a new tab gives user a Share/Save option
+    // (Harmless on desktop; helpful on iOS)
+    setTimeout(() => {
+      try { window.open(url, "_blank", "noopener"); } catch {}
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+    }, 350);
   }
 
   function toPrettyTime(t) {
@@ -342,12 +361,11 @@
     }
 
     const venuesMissing = events.filter(e => !e.venue).length;
-    const removedNotice = opts.stripRecorded ? "on" : "off";
 
     summary.textContent =
       `✅ Parsed ${events.length} event(s)\n` +
       `📍 Missing venue: ${venuesMissing}\n` +
-      `🧹 Remove “Lesson is recorded…”: ${removedNotice}\n` +
+      `🧹 Remove “Lesson is recorded…”: ${opts.stripRecorded ? "on" : "off"}\n` +
       `🕒 Timezone: ${TZID}`;
 
     const header = `
@@ -399,7 +417,6 @@
     downloadBtn.disabled = false;
   }
 
-  // State
   let lastParsed = { events: [], errors: [] };
 
   function currentOpts() {
@@ -418,6 +435,10 @@
     renderPreview(lastParsed.events, lastParsed.errors, currentOpts());
   }
 
+  // Show mobile hint on touch devices
+  const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.getElementById("mobileHint").style.display = "block";
+
   document.getElementById("paste").addEventListener("click", async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -427,25 +448,20 @@
       const errorPanel = document.getElementById("errorPanel");
       const errBox = document.getElementById("errors");
       errorPanel.style.display = "block";
-      errBox.textContent = "Clipboard paste was blocked by your browser. Click the textbox and press Ctrl+V (or long-press → Paste).";
+      errBox.textContent = "Clipboard paste was blocked by your browser. Tap the textbox and paste manually.";
     }
   });
 
   document.getElementById("preview").addEventListener("click", doPreview);
 
-  // Auto-refresh preview when toggles change (nice UX)
   ["alarm","groupInTitle","venueInTitle","stripRecorded"].forEach(id => {
     document.getElementById(id).addEventListener("change", () => {
-      if (document.getElementById("previewPanel").style.display !== "none") {
-        doPreview();
-      }
+      if (document.getElementById("previewPanel").style.display !== "none") doPreview();
     });
   });
 
-  document.getElementById("download").addEventListener("click", () => {
-    // Re-parse in case user changed text after preview
+  document.getElementById("download").addEventListener("click", async () => {
     lastParsed = parseTimetable(input.value || "");
-
     if (!lastParsed.events.length) {
       renderPreview(lastParsed.events, lastParsed.errors, currentOpts());
       return;
@@ -456,7 +472,8 @@
 
     const now = new Date();
     const fname = `suss-timetable-${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}.ics`;
-    downloadText(fname, ics);
+
+    await saveICS(fname, ics);
   });
 })();
 </script>
