@@ -5,34 +5,60 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SUSS Timetable → ICS</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0b1020; color: #e9ecff; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 40px; }
-    h1 { margin: 0 0 8px; font-size: 24px; }
-    p { margin: 8px 0 14px; color: #b9c0ff; line-height: 1.4; }
-    .card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 14px; }
-    textarea { width: 100%; min-height: 320px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.25); color: #e9ecff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.35; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
-    button { padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: #5a67ff; color: white; font-weight: 650; cursor: pointer; }
-    button:hover { filter: brightness(1.08); }
-    .opt { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); }
-    .opt input { transform: translateY(1px); }
-    .small { font-size: 12px; color: #b9c0ff; }
-    .out { margin-top: 12px; white-space: pre-wrap; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 10px; color: #e9ecff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-    .hint { margin-top: 10px; font-size: 12px; color: #b9c0ff; }
-    a { color: #aab2ff; }
+    :root{
+      --bg:#0b1020; --card:rgba(255,255,255,0.06); --bd:rgba(255,255,255,0.12);
+      --txt:#e9ecff; --mut:#b9c0ff; --btn:#5a67ff; --btn2:rgba(255,255,255,0.08);
+    }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--txt); }
+    .wrap{ max-width:1080px; margin:0 auto; padding:26px 16px 44px; }
+    h1{ margin:0 0 8px; font-size:24px; }
+    p{ margin:8px 0 14px; color:var(--mut); line-height:1.45; }
+    .card{ background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:14px; }
+    textarea{
+      width:100%; min-height:320px; resize:vertical; padding:12px;
+      border-radius:12px; border:1px solid rgba(255,255,255,0.15);
+      background:rgba(0,0,0,0.25); color:var(--txt);
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:13px; line-height:1.35;
+    }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+    button{
+      padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.18);
+      background:var(--btn); color:white; font-weight:700; cursor:pointer;
+    }
+    button.secondary{ background:var(--btn2); color:var(--txt); }
+    button:disabled{ opacity:0.55; cursor:not-allowed; }
+    button:hover:not(:disabled){ filter:brightness(1.08); }
+    .opt{ display:flex; gap:8px; align-items:center; padding:8px 10px; border-radius:12px; border:1px solid var(--bd); background:rgba(255,255,255,0.05); }
+    .opt input{ transform:translateY(1px); }
+    .small{ font-size:12px; color:var(--mut); }
+    .panel{ margin-top:12px; background:rgba(0,0,0,0.25); border:1px solid var(--bd); border-radius:12px; padding:10px; }
+    .panel h2{ margin:0 0 8px; font-size:14px; color:var(--txt); }
+    .status{ white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:var(--txt); }
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    th,td{ padding:10px 8px; border-bottom:1px solid rgba(255,255,255,0.10); vertical-align:top; }
+    th{ text-align:left; color:var(--mut); font-size:12px; letter-spacing:0.03em; text-transform:uppercase; }
+    .pill{ display:inline-block; padding:3px 8px; border:1px solid rgba(255,255,255,0.16); border-radius:999px; background:rgba(255,255,255,0.06); font-size:12px; color:var(--mut); }
+    .hint{ margin-top:10px; font-size:12px; color:var(--mut); }
+    a{ color:#aab2ff; }
   </style>
 </head>
 
 <body>
   <div class="wrap">
     <h1>SUSS Timetable → ICS Generator</h1>
-    <p>Paste your timetable (like the one you posted). Click <b>Generate .ics</b> to download a calendar file you can import into Google/Apple/Outlook calendars.</p>
+    <p>
+      Paste your timetable copied from the student portal (eServices → Course Timetable).
+      Then click <b>Preview</b> to see what will be generated, and <b>Download .ics</b> to import into your calendar.
+    </p>
 
     <div class="card">
-      <textarea id="input" placeholder="Paste timetable text here... (Tab-separated works best)"></textarea>
+      <textarea id="input" placeholder="Paste timetable text here... (tab-separated rows like your portal copy)"></textarea>
 
       <div class="row">
-        <button id="gen">Generate .ics</button>
+        <button id="paste" class="secondary">Paste from clipboard</button>
+        <button id="preview" class="secondary">Preview</button>
+        <button id="download" disabled>Download .ics</button>
 
         <label class="opt" title="Adds a reminder for each event">
           <input type="checkbox" id="alarm" />
@@ -49,12 +75,29 @@
           <span>Include venue in title</span>
         </label>
 
+        <label class="opt" title="Removes the standard '[Lesson is recorded ...]' notice from Remarks/Description">
+          <input type="checkbox" id="stripRecorded" checked />
+          <span>Remove “Lesson is recorded…”</span>
+        </label>
+
         <span class="small">Timezone: Asia/Singapore</span>
       </div>
 
-      <div id="status" class="out" style="display:none;"></div>
+      <div class="panel" id="previewPanel" style="display:none;">
+        <h2>Preview</h2>
+        <div class="status" id="summary"></div>
+        <div style="overflow:auto; margin-top:8px;">
+          <table id="previewTable"></table>
+        </div>
+      </div>
+
+      <div class="panel" id="errorPanel" style="display:none;">
+        <h2>Notes / Skipped rows</h2>
+        <div class="status" id="errors"></div>
+      </div>
+
       <div class="hint">
-        Tip: If parsing fails, try copying the table from a spreadsheet/table view so it keeps <b>tabs</b> between columns.
+        Tip: Portal copy usually keeps <b>tabs</b>. If you see everything in one column, try copying the table again (drag-select the table area).
       </div>
     </div>
   </div>
@@ -71,12 +114,10 @@
   const pad2 = (n) => String(n).padStart(2, "0");
 
   function toICSDateTimeLocal({ y, m, d, hh, mm }) {
-    // YYYYMMDDTHHMMSS
     return `${y}${pad2(m)}${pad2(d)}T${pad2(hh)}${pad2(mm)}00`;
   }
 
   function toICSStampUTC(date = new Date()) {
-    // YYYYMMDDTHHMMSSZ
     const y = date.getUTCFullYear();
     const m = date.getUTCMonth() + 1;
     const d = date.getUTCDate();
@@ -95,7 +136,6 @@
       .replace(/;/g, "\\;");
   }
 
-  // Simple line folding (75 chars is spec; most clients are tolerant, but folding helps)
   function foldLine(line) {
     const max = 74;
     if (line.length <= max) return line;
@@ -109,15 +149,7 @@
     return out;
   }
 
-  function splitRow(line) {
-    // Best case: tab-separated
-    if (line.includes("\t")) return line.split("\t").map(s => s.trim());
-    // Fallback: 2+ spaces separation (works if the paste kept spacing)
-    return line.split(/\s{2,}/).map(s => s.trim());
-  }
-
   function parseDate(dstr) {
-    // "12 JAN 2026"
     const m = dstr.trim().toUpperCase().match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/);
     if (!m) return null;
     const d = parseInt(m[1], 10);
@@ -128,7 +160,6 @@
   }
 
   function parseTime(tstr) {
-    // "12:00 PM", "08:30 AM"
     const m = tstr.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
     if (!m) return null;
     let hh = parseInt(m[1], 10);
@@ -140,7 +171,6 @@
   }
 
   function buildVTimezoneAsiaSingapore() {
-    // Singapore has no DST; this is a minimal timezone component.
     return [
       "BEGIN:VTIMEZONE",
       "TZID:Asia/Singapore",
@@ -155,62 +185,57 @@
     ].join("\r\n");
   }
 
+  function stripRecordedNotice(text) {
+    // Removes the standard notice like:
+    // [Lesson is recorded for audit, learning, and attendance-management purposes.]
+    // (with minor spacing differences)
+    return String(text ?? "").replace(
+      /\[\s*Lesson\s+is\s+recorded[\s\S]*?attendance-?management\s+purposes\.\s*\]\s*/gi,
+      ""
+    ).trim();
+  }
+
+  // Portal TSV-first parser (matches your pasted format)
   function parseTimetable(raw) {
-    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lines = raw
+      .replace(/\r/g, "")
+      .split("\n")
+      .map(l => l.trim())
+      .filter(Boolean);
 
     const events = [];
     const errors = [];
 
     for (const line of lines) {
-      // Skip obvious headers
+      if (/^S\/N\s+COURSE\s+CODE/i.test(line)) continue;
       if (/^TIMETABLE\s+DETAILS/i.test(line)) continue;
-      if (/^S\/N\s+/i.test(line)) continue;
 
-      // Must start with a serial number in your example
-      if (!/^\d+\s/.test(line) && !/^\d+\t/.test(line)) continue;
+      if (!/^\d+\t/.test(line)) continue;
 
-      const parts = splitRow(line);
-
-      // Expected columns:
-      // 0 S/N
-      // 1 Course Code
-      // 2 Course Group
-      // 3 Semester Type
-      // 4 Date
-      // 5 Day
-      // 6 Time From
-      // 7 Time To
-      // 8 Venue
-      // 9 Remarks
-      if (parts.length < 10) {
-        errors.push(`Could not parse row (not enough columns): ${line}`);
+      const parts0 = line.split("\t").map(s => s.trim());
+      if (parts0.length < 10) {
+        errors.push(`Not enough columns: ${line}`);
         continue;
       }
 
-      // If there are extra columns (rare), join them back into remarks
-      const fixed = parts.slice(0, 9);
-      fixed.push(parts.slice(9).join(" | "));
+      const parts = parts0.slice(0, 9);
+      parts.push(parts0.slice(9).join(" | "));
 
-      const [sn, course, group, semType, dateStr, dayStr, timeFromStr, timeToStr, venueRaw, remarksRaw] = fixed;
+      const [sn, course, group, semType, dateStr, dayStr, timeFromStr, timeToStr, venueRaw, remarksRaw] = parts;
 
       const date = parseDate(dateStr);
       const tFrom = parseTime(timeFromStr);
       const tTo = parseTime(timeToStr);
 
       if (!date || !tFrom || !tTo) {
-        errors.push(`Could not parse date/time in row: ${line}`);
+        errors.push(`Bad date/time: ${line}`);
         continue;
       }
 
       const venue = (venueRaw && venueRaw !== "-" ? venueRaw : "");
       const remarks = remarksRaw || "";
 
-      events.push({
-        sn, course, group, semType,
-        dateStr, dayStr,
-        date, tFrom, tTo,
-        venue, remarks
-      });
+      events.push({ sn, course, group, semType, dateStr, dayStr, date, tFrom, tTo, venue, remarks });
     }
 
     return { events, errors };
@@ -230,31 +255,25 @@
     for (const ev of events) {
       const uid = `${ev.course}-${ev.group}-${ev.date.y}${pad2(ev.date.m)}${pad2(ev.date.d)}-${pad2(ev.tFrom.hh)}${pad2(ev.tFrom.mm)}-${Math.random().toString(16).slice(2)}@suss-timetable`;
 
-      const dtstart = toICSDateTimeLocal({
-        ...ev.date,
-        hh: ev.tFrom.hh,
-        mm: ev.tFrom.mm
-      });
-
-      const dtend = toICSDateTimeLocal({
-        ...ev.date,
-        hh: ev.tTo.hh,
-        mm: ev.tTo.mm
-      });
+      const dtstart = toICSDateTimeLocal({ ...ev.date, hh: ev.tFrom.hh, mm: ev.tFrom.mm });
+      const dtend   = toICSDateTimeLocal({ ...ev.date, hh: ev.tTo.hh,   mm: ev.tTo.mm });
 
       let summary = ev.course;
       if (opts.groupInTitle) summary += ` (${ev.group})`;
       if (opts.venueInTitle && ev.venue) summary += ` @ ${ev.venue}`;
+
+      let remarksClean = ev.remarks || "";
+      if (opts.stripRecorded) remarksClean = stripRecordedNotice(remarksClean);
 
       const descLines = [
         `Course: ${ev.course}`,
         `Group: ${ev.group}`,
         `Semester Type: ${ev.semType}`,
         `Date: ${ev.dateStr} (${ev.dayStr})`,
-        `Time: ${ev.tFrom.hh.toString().padStart(2,"0")}:${pad2(ev.tFrom.mm)} - ${ev.tTo.hh.toString().padStart(2,"0")}:${pad2(ev.tTo.mm)}`,
+        `Time: ${pad2(ev.tFrom.hh)}:${pad2(ev.tFrom.mm)} - ${pad2(ev.tTo.hh)}:${pad2(ev.tTo.mm)}`
       ];
       if (ev.venue) descLines.push(`Venue: ${ev.venue}`);
-      if (ev.remarks) descLines.push(`Remarks: ${ev.remarks}`);
+      if (remarksClean) descLines.push(`Remarks: ${remarksClean}`);
 
       const description = descLines.join("\n");
 
@@ -264,7 +283,6 @@
       lines.push(foldLine(`SUMMARY:${escapeICS(summary)}`));
       lines.push(foldLine(`DTSTART;TZID=${TZID}:${dtstart}`));
       lines.push(foldLine(`DTEND;TZID=${TZID}:${dtend}`));
-
       if (ev.venue) lines.push(foldLine(`LOCATION:${escapeICS(ev.venue)}`));
       lines.push(foldLine(`DESCRIPTION:${escapeICS(description)}`));
 
@@ -295,37 +313,150 @@
     URL.revokeObjectURL(url);
   }
 
-  const input = document.getElementById("input");
-  const status = document.getElementById("status");
-  const genBtn = document.getElementById("gen");
+  function toPrettyTime(t) {
+    const hh24 = t.hh;
+    const mm = pad2(t.mm);
+    const ap = hh24 >= 12 ? "PM" : "AM";
+    let hh12 = hh24 % 12;
+    if (hh12 === 0) hh12 = 12;
+    return `${hh12}:${mm} ${ap}`;
+  }
 
-  genBtn.addEventListener("click", () => {
-    const raw = input.value || "";
-    const opts = {
-      alarm: document.getElementById("alarm").checked,
-      groupInTitle: document.getElementById("groupInTitle").checked,
-      venueInTitle: document.getElementById("venueInTitle").checked
-    };
-
-    const { events, errors } = parseTimetable(raw);
+  function renderPreview(events, errors, opts) {
+    const previewPanel = document.getElementById("previewPanel");
+    const errorPanel = document.getElementById("errorPanel");
+    const summary = document.getElementById("summary");
+    const errBox = document.getElementById("errors");
+    const table = document.getElementById("previewTable");
+    const downloadBtn = document.getElementById("download");
 
     if (!events.length) {
-      status.style.display = "block";
-      status.textContent =
+      previewPanel.style.display = "none";
+      downloadBtn.disabled = true;
+
+      errorPanel.style.display = "block";
+      errBox.textContent =
         "No events parsed.\n\n" +
-        (errors.length ? ("Errors:\n- " + errors.join("\n- ")) : "Try pasting a tab-separated table.");
+        (errors.length ? ("Skipped:\n- " + errors.join("\n- ")) : "Try copying the timetable table again from the portal.");
       return;
     }
 
-    const ics = buildICS(events, opts);
-    const today = new Date();
-    const fname = `suss-timetable-${today.getFullYear()}${pad2(today.getMonth()+1)}${pad2(today.getDate())}.ics`;
-    downloadText(fname, ics);
+    const venuesMissing = events.filter(e => !e.venue).length;
+    const removedNotice = opts.stripRecorded ? "on" : "off";
 
-    status.style.display = "block";
-    status.textContent =
-      `✅ Generated ${events.length} event(s) and downloaded: ${fname}\n` +
-      (errors.length ? `\n⚠️ Skipped ${errors.length} row(s):\n- ${errors.join("\n- ")}` : "");
+    summary.textContent =
+      `✅ Parsed ${events.length} event(s)\n` +
+      `📍 Missing venue: ${venuesMissing}\n` +
+      `🧹 Remove “Lesson is recorded…”: ${removedNotice}\n` +
+      `🕒 Timezone: ${TZID}`;
+
+    const header = `
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Day</th>
+          <th>Time</th>
+          <th>Course</th>
+          <th>Group</th>
+          <th>Venue</th>
+          <th>Remarks (short)</th>
+        </tr>
+      </thead>
+    `;
+
+    const rows = events.map(e => {
+      const time = `${toPrettyTime(e.tFrom)} – ${toPrettyTime(e.tTo)}`;
+      const venue = e.venue ? e.venue : `<span class="pill">TBC</span>`;
+
+      let rem = e.remarks || "";
+      if (opts.stripRecorded) rem = stripRecordedNotice(rem);
+      const remarksShort = rem.slice(0, 80) + (rem.length > 80 ? "…" : "");
+
+      return `
+        <tr>
+          <td>${e.dateStr}</td>
+          <td>${e.dayStr}</td>
+          <td>${time}</td>
+          <td><b>${e.course}</b></td>
+          <td>${e.group}</td>
+          <td>${venue}</td>
+          <td>${remarksShort}</td>
+        </tr>
+      `;
+    }).join("");
+
+    table.innerHTML = header + `<tbody>${rows}</tbody>`;
+    previewPanel.style.display = "block";
+
+    if (errors.length) {
+      errorPanel.style.display = "block";
+      errBox.textContent = `Skipped ${errors.length} row(s):\n- ${errors.join("\n- ")}`;
+    } else {
+      errorPanel.style.display = "none";
+      errBox.textContent = "";
+    }
+
+    downloadBtn.disabled = false;
+  }
+
+  // State
+  let lastParsed = { events: [], errors: [] };
+
+  function currentOpts() {
+    return {
+      alarm: document.getElementById("alarm").checked,
+      groupInTitle: document.getElementById("groupInTitle").checked,
+      venueInTitle: document.getElementById("venueInTitle").checked,
+      stripRecorded: document.getElementById("stripRecorded").checked
+    };
+  }
+
+  const input = document.getElementById("input");
+
+  async function doPreview() {
+    lastParsed = parseTimetable(input.value || "");
+    renderPreview(lastParsed.events, lastParsed.errors, currentOpts());
+  }
+
+  document.getElementById("paste").addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      input.value = text;
+      await doPreview();
+    } catch {
+      const errorPanel = document.getElementById("errorPanel");
+      const errBox = document.getElementById("errors");
+      errorPanel.style.display = "block";
+      errBox.textContent = "Clipboard paste was blocked by your browser. Click the textbox and press Ctrl+V (or long-press → Paste).";
+    }
+  });
+
+  document.getElementById("preview").addEventListener("click", doPreview);
+
+  // Auto-refresh preview when toggles change (nice UX)
+  ["alarm","groupInTitle","venueInTitle","stripRecorded"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      if (document.getElementById("previewPanel").style.display !== "none") {
+        doPreview();
+      }
+    });
+  });
+
+  document.getElementById("download").addEventListener("click", () => {
+    // Re-parse in case user changed text after preview
+    lastParsed = parseTimetable(input.value || "");
+
+    if (!lastParsed.events.length) {
+      renderPreview(lastParsed.events, lastParsed.errors, currentOpts());
+      return;
+    }
+
+    const opts = currentOpts();
+    const ics = buildICS(lastParsed.events, opts);
+
+    const now = new Date();
+    const fname = `suss-timetable-${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}.ics`;
+    downloadText(fname, ics);
   });
 })();
 </script>
