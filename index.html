@@ -1,14 +1,333 @@
-<!DOCTYPE html>
-<html lang="en>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>SUSS Timetable -> Calender</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SUSS Timetable → ICS</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0b1020; color: #e9ecff; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 40px; }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 8px 0 14px; color: #b9c0ff; line-height: 1.4; }
+    .card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 14px; }
+    textarea { width: 100%; min-height: 320px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.25); color: #e9ecff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.35; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    button { padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); background: #5a67ff; color: white; font-weight: 650; cursor: pointer; }
+    button:hover { filter: brightness(1.08); }
+    .opt { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); }
+    .opt input { transform: translateY(1px); }
+    .small { font-size: 12px; color: #b9c0ff; }
+    .out { margin-top: 12px; white-space: pre-wrap; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 10px; color: #e9ecff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .hint { margin-top: 10px; font-size: 12px; color: #b9c0ff; }
+    a { color: #aab2ff; }
+  </style>
 </head>
+
 <body>
-  <h1>SUSS Timetable -> Calender</h1>
-  <textarea id="input" placeholder="Paste timetable here"></textarea>
-  <button id="generate">Generate Calender (.ics)</button>
-  <script src ="script.js"></script>
+  <div class="wrap">
+    <h1>SUSS Timetable → ICS Generator</h1>
+    <p>Paste your timetable (like the one you posted). Click <b>Generate .ics</b> to download a calendar file you can import into Google/Apple/Outlook calendars.</p>
+
+    <div class="card">
+      <textarea id="input" placeholder="Paste timetable text here... (Tab-separated works best)"></textarea>
+
+      <div class="row">
+        <button id="gen">Generate .ics</button>
+
+        <label class="opt" title="Adds a reminder for each event">
+          <input type="checkbox" id="alarm" />
+          <span>Add 15-min reminder</span>
+        </label>
+
+        <label class="opt" title="Put Course Group in the title">
+          <input type="checkbox" id="groupInTitle" checked />
+          <span>Include group in title</span>
+        </label>
+
+        <label class="opt" title="Put venue in the title (helps if calendar UI hides location)">
+          <input type="checkbox" id="venueInTitle" />
+          <span>Include venue in title</span>
+        </label>
+
+        <span class="small">Timezone: Asia/Singapore</span>
+      </div>
+
+      <div id="status" class="out" style="display:none;"></div>
+      <div class="hint">
+        Tip: If parsing fails, try copying the table from a spreadsheet/table view so it keeps <b>tabs</b> between columns.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const TZID = "Asia/Singapore";
+
+  const monthMap = {
+    JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
+    JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12
+  };
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  function toICSDateTimeLocal({ y, m, d, hh, mm }) {
+    // YYYYMMDDTHHMMSS
+    return `${y}${pad2(m)}${pad2(d)}T${pad2(hh)}${pad2(mm)}00`;
+  }
+
+  function toICSStampUTC(date = new Date()) {
+    // YYYYMMDDTHHMMSSZ
+    const y = date.getUTCFullYear();
+    const m = date.getUTCMonth() + 1;
+    const d = date.getUTCDate();
+    const hh = date.getUTCHours();
+    const mm = date.getUTCMinutes();
+    const ss = date.getUTCSeconds();
+    return `${y}${pad2(m)}${pad2(d)}T${pad2(hh)}${pad2(mm)}${pad2(ss)}Z`;
+  }
+
+  function escapeICS(text) {
+    return String(text ?? "")
+      .replace(/\\/g, "\\\\")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "")
+      .replace(/,/g, "\\,")
+      .replace(/;/g, "\\;");
+  }
+
+  // Simple line folding (75 chars is spec; most clients are tolerant, but folding helps)
+  function foldLine(line) {
+    const max = 74;
+    if (line.length <= max) return line;
+    let out = "";
+    let i = 0;
+    while (i < line.length) {
+      const chunk = line.slice(i, i + max);
+      out += (i === 0 ? "" : "\r\n ") + chunk;
+      i += max;
+    }
+    return out;
+  }
+
+  function splitRow(line) {
+    // Best case: tab-separated
+    if (line.includes("\t")) return line.split("\t").map(s => s.trim());
+    // Fallback: 2+ spaces separation (works if the paste kept spacing)
+    return line.split(/\s{2,}/).map(s => s.trim());
+  }
+
+  function parseDate(dstr) {
+    // "12 JAN 2026"
+    const m = dstr.trim().toUpperCase().match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/);
+    if (!m) return null;
+    const d = parseInt(m[1], 10);
+    const mon = monthMap[m[2]];
+    const y = parseInt(m[3], 10);
+    if (!mon) return null;
+    return { y, m: mon, d };
+  }
+
+  function parseTime(tstr) {
+    // "12:00 PM", "08:30 AM"
+    const m = tstr.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+    if (!m) return null;
+    let hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const ap = m[3];
+    if (hh === 12) hh = 0;
+    if (ap === "PM") hh += 12;
+    return { hh, mm };
+  }
+
+  function buildVTimezoneAsiaSingapore() {
+    // Singapore has no DST; this is a minimal timezone component.
+    return [
+      "BEGIN:VTIMEZONE",
+      "TZID:Asia/Singapore",
+      "X-LIC-LOCATION:Asia/Singapore",
+      "BEGIN:STANDARD",
+      "TZOFFSETFROM:+0800",
+      "TZOFFSETTO:+0800",
+      "TZNAME:SGT",
+      "DTSTART:19700101T000000",
+      "END:STANDARD",
+      "END:VTIMEZONE"
+    ].join("\r\n");
+  }
+
+  function parseTimetable(raw) {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    const events = [];
+    const errors = [];
+
+    for (const line of lines) {
+      // Skip obvious headers
+      if (/^TIMETABLE\s+DETAILS/i.test(line)) continue;
+      if (/^S\/N\s+/i.test(line)) continue;
+
+      // Must start with a serial number in your example
+      if (!/^\d+\s/.test(line) && !/^\d+\t/.test(line)) continue;
+
+      const parts = splitRow(line);
+
+      // Expected columns:
+      // 0 S/N
+      // 1 Course Code
+      // 2 Course Group
+      // 3 Semester Type
+      // 4 Date
+      // 5 Day
+      // 6 Time From
+      // 7 Time To
+      // 8 Venue
+      // 9 Remarks
+      if (parts.length < 10) {
+        errors.push(`Could not parse row (not enough columns): ${line}`);
+        continue;
+      }
+
+      // If there are extra columns (rare), join them back into remarks
+      const fixed = parts.slice(0, 9);
+      fixed.push(parts.slice(9).join(" | "));
+
+      const [sn, course, group, semType, dateStr, dayStr, timeFromStr, timeToStr, venueRaw, remarksRaw] = fixed;
+
+      const date = parseDate(dateStr);
+      const tFrom = parseTime(timeFromStr);
+      const tTo = parseTime(timeToStr);
+
+      if (!date || !tFrom || !tTo) {
+        errors.push(`Could not parse date/time in row: ${line}`);
+        continue;
+      }
+
+      const venue = (venueRaw && venueRaw !== "-" ? venueRaw : "");
+      const remarks = remarksRaw || "";
+
+      events.push({
+        sn, course, group, semType,
+        dateStr, dayStr,
+        date, tFrom, tTo,
+        venue, remarks
+      });
+    }
+
+    return { events, errors };
+  }
+
+  function buildICS(events, opts) {
+    const dtstamp = toICSStampUTC(new Date());
+
+    const lines = [];
+    lines.push("BEGIN:VCALENDAR");
+    lines.push("VERSION:2.0");
+    lines.push("PRODID:-//SUSS Timetable to ICS//EN");
+    lines.push("CALSCALE:GREGORIAN");
+    lines.push("METHOD:PUBLISH");
+    lines.push(buildVTimezoneAsiaSingapore());
+
+    for (const ev of events) {
+      const uid = `${ev.course}-${ev.group}-${ev.date.y}${pad2(ev.date.m)}${pad2(ev.date.d)}-${pad2(ev.tFrom.hh)}${pad2(ev.tFrom.mm)}-${Math.random().toString(16).slice(2)}@suss-timetable`;
+
+      const dtstart = toICSDateTimeLocal({
+        ...ev.date,
+        hh: ev.tFrom.hh,
+        mm: ev.tFrom.mm
+      });
+
+      const dtend = toICSDateTimeLocal({
+        ...ev.date,
+        hh: ev.tTo.hh,
+        mm: ev.tTo.mm
+      });
+
+      let summary = ev.course;
+      if (opts.groupInTitle) summary += ` (${ev.group})`;
+      if (opts.venueInTitle && ev.venue) summary += ` @ ${ev.venue}`;
+
+      const descLines = [
+        `Course: ${ev.course}`,
+        `Group: ${ev.group}`,
+        `Semester Type: ${ev.semType}`,
+        `Date: ${ev.dateStr} (${ev.dayStr})`,
+        `Time: ${ev.tFrom.hh.toString().padStart(2,"0")}:${pad2(ev.tFrom.mm)} - ${ev.tTo.hh.toString().padStart(2,"0")}:${pad2(ev.tTo.mm)}`,
+      ];
+      if (ev.venue) descLines.push(`Venue: ${ev.venue}`);
+      if (ev.remarks) descLines.push(`Remarks: ${ev.remarks}`);
+
+      const description = descLines.join("\n");
+
+      lines.push("BEGIN:VEVENT");
+      lines.push(foldLine(`UID:${escapeICS(uid)}`));
+      lines.push(`DTSTAMP:${dtstamp}`);
+      lines.push(foldLine(`SUMMARY:${escapeICS(summary)}`));
+      lines.push(foldLine(`DTSTART;TZID=${TZID}:${dtstart}`));
+      lines.push(foldLine(`DTEND;TZID=${TZID}:${dtend}`));
+
+      if (ev.venue) lines.push(foldLine(`LOCATION:${escapeICS(ev.venue)}`));
+      lines.push(foldLine(`DESCRIPTION:${escapeICS(description)}`));
+
+      if (opts.alarm) {
+        lines.push("BEGIN:VALARM");
+        lines.push("TRIGGER:-PT15M");
+        lines.push("ACTION:DISPLAY");
+        lines.push(foldLine(`DESCRIPTION:${escapeICS("Reminder: " + summary)}`));
+        lines.push("END:VALARM");
+      }
+
+      lines.push("END:VEVENT");
+    }
+
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n") + "\r\n";
+  }
+
+  function downloadText(filename, text) {
+    const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const input = document.getElementById("input");
+  const status = document.getElementById("status");
+  const genBtn = document.getElementById("gen");
+
+  genBtn.addEventListener("click", () => {
+    const raw = input.value || "";
+    const opts = {
+      alarm: document.getElementById("alarm").checked,
+      groupInTitle: document.getElementById("groupInTitle").checked,
+      venueInTitle: document.getElementById("venueInTitle").checked
+    };
+
+    const { events, errors } = parseTimetable(raw);
+
+    if (!events.length) {
+      status.style.display = "block";
+      status.textContent =
+        "No events parsed.\n\n" +
+        (errors.length ? ("Errors:\n- " + errors.join("\n- ")) : "Try pasting a tab-separated table.");
+      return;
+    }
+
+    const ics = buildICS(events, opts);
+    const today = new Date();
+    const fname = `suss-timetable-${today.getFullYear()}${pad2(today.getMonth()+1)}${pad2(today.getDate())}.ics`;
+    downloadText(fname, ics);
+
+    status.style.display = "block";
+    status.textContent =
+      `✅ Generated ${events.length} event(s) and downloaded: ${fname}\n` +
+      (errors.length ? `\n⚠️ Skipped ${errors.length} row(s):\n- ${errors.join("\n- ")}` : "");
+  });
+})();
+</script>
 </body>
 </html>
