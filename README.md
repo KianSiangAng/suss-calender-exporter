@@ -1,4 +1,4 @@
-# suss-calender-exporter
+# suss-calendar-exporter
 Export Course Timetable from SUSS e-services onto your calender
 
 Log in to SUSS e-services -> Course Timetable
